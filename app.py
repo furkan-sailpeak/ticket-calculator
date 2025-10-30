@@ -38,4 +38,56 @@ if uploaded_files:
                 if 0.50 <= price <= 500:  # reasonable range
                     all_detected_prices.append(price)
             
-            # 2️⃣ Fallback
+            # 2️⃣ Fallback: if no currency symbols found, look for numeric prices
+            if not currency_matches:
+                # Look for patterns that might be prices
+                all_prices = re.findall(r"\b(\d+[.,]\d{2})\b", text)
+                for p in all_prices:
+                    value = float(p.replace(',', '.'))
+                    
+                    # Parse the parts
+                    parts = p.replace(',', '.').split('.')
+                    whole_part = int(parts[0])
+                    decimal_part = int(parts[1])
+                    
+                    # Skip if it looks like a date (valid day/month combinations)
+                    # Common date patterns: DD.MM (01.01 to 31.12) or MM.DD
+                    is_likely_date = (
+                        (1 <= whole_part <= 31 and 1 <= decimal_part <= 12) or  # DD.MM
+                        (1 <= whole_part <= 12 and 1 <= decimal_part <= 31)     # MM.DD
+                    ) and whole_part <= 31 and decimal_part <= 59  # extra date check
+                    
+                    # Skip dates, but keep valid prices (like 25.00)
+                    # The key insight: prices often have .00, .50, .99 endings
+                    # Dates rarely have these endings
+                    has_price_ending = decimal_part in [0, 50, 99] or str(decimal_part).endswith('0')
+                    
+                    if is_likely_date and not has_price_ending:
+                        continue
+                    
+                    # Filter by reasonable price range
+                    if 0.50 <= value <= 500:
+                        all_detected_prices.append(value)
+        
+        # Add all detected prices from this file
+        if all_detected_prices:
+            detected_prices.extend(all_detected_prices)
+            total += sum(all_detected_prices)
+        else:
+            detected_prices.append("Not found")
+    
+    # 🧮 Display results
+    st.subheader("🧾 Results")
+    ticket_num = 1
+    for price in detected_prices:
+        if isinstance(price, float):
+            st.write(f"**Ticket {ticket_num}:** €{price:.2f}")
+            ticket_num += 1
+        else:
+            st.write(f"**File:** ❌ Price not detected")
+    
+    st.markdown("---")
+    st.write(f"**Total amount:** €{total:.2f}")
+    st.write(f"**Number of tickets found:** {len([p for p in detected_prices if isinstance(p, float)])}")
+else:
+    st.info("⬆️ Please upload one or more transport tickets to begin.")
